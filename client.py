@@ -1,27 +1,38 @@
+# packet_sender.py
 from scapy.all import send, Raw
 from scapy.layers.inet import IP
 
-# Function to read the content of a file
-def read_file(file_path):
-    with open(file_path, "rb") as f:
-        file_content = f.read()
-    return file_content
+class Client:
+    def __init__(self, file_path, identifier, dst_ip="127.0.0.1", src_ip="127.0.0.1", ttl=64):
+        self.file_path = file_path
+        self.identifier = identifier
+        self.dst_ip = dst_ip
+        self.src_ip = src_ip
+        self.ttl = ttl
 
-# Path to the file you want to send
-file_path = "./sample.txt"  # Replace with your file path
+    def read_file(self):
+        """Reads the content of the file."""
+        with open(self.file_path, "rb") as f:
+            return f.read()
 
-# Read the file content
-file_data = read_file(file_path)
+    def create_packet(self, file_data):
+        """Creates an IP packet with the identifier and file data."""
+        combined_payload = self.identifier + file_data
+        return IP(src=self.src_ip, dst=self.dst_ip, ttl=self.ttl) / Raw(combined_payload)
 
-# Define the identifier (this could be anything you want to tag the packet with)
-identifier = b"UniquePacket12345"
+    def send_packet(self):
+        """Sends the crafted packet."""
+        file_data = self.read_file()
+        packet = self.create_packet(file_data)
+        send(packet)
+        print(f"Packet sent: {self.src_ip} -> {self.dst_ip} with identifier: {self.identifier}")
 
-# Combine the identifier and the file content into a single payload
-combined_payload = identifier + file_data
+# Main execution flow
+if __name__ == "__main__":
+    # Define your file path and identifier
+    file_path = "sample.txt"  # Replace with your file path
+    identifier = b"UniquePacket12345"
 
-# Create an IP packet with the combined payload (identifier + file content)
-ip_packet = IP(dst="127.0.0.1", src="127.0.0.1", ttl=64) / Raw(combined_payload)
-
-# Send the packet
-send(ip_packet)
-print("Packet with identifier and file content sent")
+    # Create a PacketSender instance and send the packet
+    sender = Client(file_path, identifier)
+    sender.send_packet()
