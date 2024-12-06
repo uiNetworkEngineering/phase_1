@@ -1,43 +1,61 @@
-# packet_utils.py
+import logging
+import os
 import time
 
 from scapy.layers.inet import IP
-from scapy.packet import Raw
+from scapy.all import Raw
+
+logging.basicConfig(level=logging.DEBUG, format="%(asctime)s - %(levelname)s - %(message)s")
+logger = logging.getLogger(__name__)
 
 
 class CustomHeader:
-    def __init__(self, identifier, timestamp=None, seq_num=None):
-        """Initializes the custom header with identifier, timestamp, and sequence number."""
+    """Class representing the custom header for packet."""
+
+    def __init__(self, identifier, timestamp, seq_num):
         self.identifier = identifier
-        self.timestamp = timestamp if timestamp else int(time.time())  # Default to current timestamp
-        self.seq_num = seq_num if seq_num else 1  # Default sequence number is 1
+        self.timestamp = timestamp
+        self.seq_num = seq_num
 
     def build_header(self):
-        """Constructs the custom header."""
-        header = self.identifier.to_bytes(4, byteorder='big')  # 4-byte identifier
-        header += self.timestamp.to_bytes(4, byteorder='big')  # 4-byte timestamp
-        header += self.seq_num.to_bytes(4, byteorder='big')  # 4-byte sequence number
+        """Builds the custom header."""
+        header = self.identifier.to_bytes(4, byteorder='big')
+        header += self.timestamp.to_bytes(4, byteorder='big')
+        header += self.seq_num.to_bytes(4, byteorder='big')
         return header
 
     @classmethod
     def from_bytes(cls, header_bytes):
-        """Convert raw bytes into a CustomHeader instance."""
+        """Converts raw bytes into a CustomHeader instance."""
         identifier = int.from_bytes(header_bytes[:4], byteorder='big')
         timestamp = int.from_bytes(header_bytes[4:8], byteorder='big')
         seq_num = int.from_bytes(header_bytes[8:12], byteorder='big')
         return cls(identifier, timestamp, seq_num)
 
+
 class PacketHandler:
-    @staticmethod
-    def create_packet(src_ip, dst_ip, ttl, file_data, identifier, seq_num=1):
-        """Creates an IP packet with a custom header and file data."""
-        custom_header = CustomHeader(identifier, seq_num=seq_num)
-        header = custom_header.build_header()
-        combined_payload = header + file_data  # Prepend header to the file data
-        return IP(src=src_ip, dst=dst_ip, ttl=ttl) / Raw(combined_payload)
+    """Class for handling packet operations like file reading and packet creation."""
 
     @staticmethod
     def read_file(file_path):
-        """Reads the content of the file."""
-        with open(file_path, "rb") as f:
-            return f.read()
+        """Reads the content of a file and returns its data."""
+        try:
+            if not os.path.exists(file_path):
+                logger.error(f"File not found: {file_path}")
+                return b""
+            with open(file_path, "rb") as f:
+                file_data = f.read()
+            logger.info(f"File '{file_path}' read successfully.")
+            return file_data
+        except Exception as e:
+            logger.error(f"Error reading file {file_path}: {e}")
+            return b""
+
+    @staticmethod
+    def create_packet(src_ip, dst_ip, ttl, file_data, identifier, seq_num):
+        """Creates an IP packet with a custom header and the file data."""
+        timestamp = int(time.time())
+        header = CustomHeader(identifier, timestamp, seq_num).build_header()
+        combined_payload = header + file_data
+        packet = IP(src=src_ip, dst=dst_ip, ttl=ttl) / Raw(combined_payload)
+        return packet

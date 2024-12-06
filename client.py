@@ -1,7 +1,6 @@
-# packet_sender.py
+import time
 from scapy.all import send
-
-from utils.packet_utils import PacketHandler
+from utils.packet_utils import PacketHandler, logger
 
 
 class PacketSender:
@@ -16,9 +15,21 @@ class PacketSender:
     def send_packet(self):
         """Reads file, creates the packet, and sends it."""
         file_data = PacketHandler.read_file(self.file_path)
-        packet = PacketHandler.create_packet(self.src_ip, self.dst_ip, self.ttl, file_data, self.identifier, self.seq_num)
-        send(packet)
-        print(f"Packet sent: {self.src_ip} -> {self.dst_ip} with custom header (ID: {self.identifier}, Seq: {self.seq_num})")
+        if not file_data:
+            print(f"Error: No data to send from the file '{self.file_path}'")
+            return
+
+        packet = PacketHandler.create_packet(self.src_ip, self.dst_ip, self.ttl, file_data, self.identifier,
+                                             self.seq_num)
+
+        try:
+            send(packet)
+            print(
+                f"Packet sent: {self.src_ip} -> {self.dst_ip} with custom header (ID: {self.identifier}, Seq: {self.seq_num})")
+        except Exception as e:
+            print(f"Error sending packet: {e}")
+            logger.error(f"Error sending packet: {e}")
+
 
 # Main execution flow
 if __name__ == "__main__":
