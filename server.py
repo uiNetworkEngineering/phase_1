@@ -15,14 +15,19 @@ class PacketSniffer:
         """Processes the captured packet, unwraps it, and checks for the custom header."""
         if packet.haslayer(Raw):
             raw_data = packet[Raw].load
-            if len(raw_data) < 12:  # Ensure packet is large enough to contain header
+            if len(raw_data) < 16:  # Ensure packet is large enough to contain header
                 return
 
             # Unwrap the outer packet
-            outer_header_bytes = raw_data[:12]
-            outer_file_data = raw_data[12:]
+            outer_header_bytes = raw_data[:16]
+            outer_file_data = raw_data[16:]
 
             outer_custom_header = CustomHeader.from_bytes(outer_header_bytes)
+
+            # Validate outer packet checksum
+            if not CustomHeader.validate_crc32(outer_file_data, outer_custom_header.checksum):
+                logger.error("Outer packet checksum validation failed")
+                return
 
             if outer_custom_header.identifier == self.expected_identifier:
                 logger.info(f"Outer packet detected with ID: {outer_custom_header.identifier}, "
@@ -33,10 +38,15 @@ class PacketSniffer:
                 inner_packet = IP(outer_file_data)  # Create an IP packet from the inner packet payload
                 if inner_packet.haslayer(Raw):
                     inner_raw_data = inner_packet[Raw].load
-                    inner_header_bytes = inner_raw_data[:12]
-                    file_content = inner_raw_data[12:].decode(errors='ignore')
-
+                    inner_header_bytes = inner_raw_data[:16]
+                    file_content = inner_raw_data[16:].decode(errors='ignore')
                     inner_custom_header = CustomHeader.from_bytes(inner_header_bytes)
+
+                    # Validate inner packet checksum
+                    if not CustomHeader.validate_crc32(inner_raw_data[16:], inner_custom_header.checksum):
+                        logger.error("Inner packet checksum validation failed")
+                        return
+
                     if inner_custom_header.identifier == self.expected_identifier:
                         logger.info(f"Inner packet detected with ID: {inner_custom_header.identifier}, "
                                     f"Timestamp: {inner_custom_header.timestamp}, Seq: {inner_custom_header.seq_num}")
@@ -50,7 +60,6 @@ class PacketSniffer:
         except Exception as e:
             logger.error(f"Error sniffing packets: {e}")
             print(f"Error sniffing packets: {e}")
-
 
 if __name__ == "__main__":
     expected_identifier = 12345678  # The identifier to filter on
