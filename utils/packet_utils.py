@@ -1,13 +1,11 @@
-import logging
-import os
 import time
-
+import os
 from scapy.layers.inet import IP
 from scapy.all import Raw
+import logging
 
 logging.basicConfig(level=logging.DEBUG, format="%(asctime)s - %(levelname)s - %(message)s")
 logger = logging.getLogger(__name__)
-
 
 class CustomHeader:
     """Class representing the custom header for packet."""
@@ -19,10 +17,9 @@ class CustomHeader:
 
     def build_header(self):
         """Builds the custom header."""
-        header = self.identifier.to_bytes(4, byteorder='big')
-        header += self.timestamp.to_bytes(4, byteorder='big')
-        header += self.seq_num.to_bytes(4, byteorder='big')
-        return header
+        return self.identifier.to_bytes(4, byteorder='big') + \
+               self.timestamp.to_bytes(4, byteorder='big') + \
+               self.seq_num.to_bytes(4, byteorder='big')
 
     @classmethod
     def from_bytes(cls, header_bytes):
@@ -57,5 +54,4 @@ class PacketHandler:
         timestamp = int(time.time())
         header = CustomHeader(identifier, timestamp, seq_num).build_header()
         combined_payload = header + file_data
-        packet = IP(src=src_ip, dst=dst_ip, ttl=ttl) / Raw(combined_payload)
-        return packet
+        return IP(src=src_ip, dst=dst_ip, ttl=ttl) / Raw(combined_payload)
