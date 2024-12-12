@@ -1,5 +1,6 @@
-from scapy.layers.inet import IP
 from scapy.all import sniff, Raw
+
+from utils.custom_protocol_header import CustomProtocolHeader
 from utils.packet_utils import CustomHeader, logger
 
 class PacketSniffer:
@@ -31,23 +32,19 @@ class PacketSniffer:
                             f"Timestamp: {outer_custom_header.timestamp}, Seq: {outer_custom_header.seq_num}")
                 print(f"Outer packet file content: {outer_file_data.decode(errors='ignore')}")
 
-                # Unwrap the inner packet
-                inner_packet = IP(outer_file_data)  # Create an IP packet from the inner packet payload
-                if inner_packet.haslayer(Raw):
-                    inner_raw_data = inner_packet[Raw].load
-                    inner_header_bytes = inner_raw_data[:16]
-                    file_content = inner_raw_data[16:].decode(errors='ignore')
-                    inner_custom_header = CustomHeader.from_bytes(inner_header_bytes)
+                # Unwrap the inner custom protocol packet
+                inner_raw_data = outer_file_data  # The raw data of the inner packet
+                inner_custom_header = CustomProtocolHeader.from_bytes(inner_raw_data[:12])
+                inner_payload = inner_raw_data[12:]
 
-                    # Validate inner packet checksum
-                    if CustomHeader.checksum(inner_raw_data[16:]) != inner_custom_header.checksum:  # Validate using checksum
-                        logger.error("Inner packet checksum validation failed")
-                        return
+                # Validate inner packet checksum
+                if CustomHeader.checksum(inner_payload) != inner_custom_header.checksum:  # Validate using checksum
+                    return
 
-                    if inner_custom_header.identifier == self.expected_identifier:
-                        logger.info(f"Inner packet detected with ID: {inner_custom_header.identifier}, "
-                                    f"Timestamp: {inner_custom_header.timestamp}, Seq: {inner_custom_header.seq_num}")
-                        print(f"File Content from inner packet: {file_content}")
+                if inner_custom_header.protocol_id == self.expected_identifier:
+                    logger.info(f"Inner packet detected with Protocol ID: {inner_custom_header.protocol_id}, "
+                                f"Seq: {inner_custom_header.sequence_number}")
+                    print(f"File Content from inner packet: {inner_payload.decode(errors='ignore')}")
 
     def start_sniffing(self):
         """Starts sniffing packets on the specified interface."""
