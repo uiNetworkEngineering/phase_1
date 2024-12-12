@@ -1,11 +1,13 @@
 from scapy.all import sniff, Raw
 
-from utils.custom_protocol_header import CustomProtocolHeader
-from utils.packet_utils import CustomHeader, logger
+from utils.custom_protocol import CustomProtocol
+from utils.packet_utils import CustomHeader
+from utils.utills import checksum, logger
 
-class PacketSniffer:
-    def __init__(self, expected_identifier, src_ip="127.0.0.1", dst_ip="127.0.0.1", iface=r"\Device\NPF_Loopback"):
-        self.expected_identifier = expected_identifier
+
+class Server:
+    def __init__(self, identifier, src_ip="127.0.0.1", dst_ip="127.0.0.1", iface=r"\Device\NPF_Loopback"):
+        self.expected_identifier = identifier
         self.src_ip = src_ip
         self.dst_ip = dst_ip
         self.iface = iface
@@ -24,7 +26,7 @@ class PacketSniffer:
             outer_custom_header = CustomHeader.from_bytes(outer_header_bytes)
 
             # Validate outer packet checksum
-            if CustomHeader.checksum(outer_file_data) != outer_custom_header.checksum:  # Validate using checksum
+            if checksum(outer_file_data) != outer_custom_header.checksum:  # Validate using checksum
                 return
 
             if outer_custom_header.identifier == self.expected_identifier:
@@ -34,11 +36,11 @@ class PacketSniffer:
 
                 # Unwrap the inner custom protocol packet
                 inner_raw_data = outer_file_data  # The raw data of the inner packet
-                inner_custom_header = CustomProtocolHeader.from_bytes(inner_raw_data[:12])
+                inner_custom_header = CustomProtocol.from_bytes(inner_raw_data[:12])
                 inner_payload = inner_raw_data[12:]
 
                 # Validate inner packet checksum
-                if CustomHeader.checksum(inner_payload) != inner_custom_header.checksum:  # Validate using checksum
+                if checksum(inner_payload) != inner_custom_header.checksum:  # Validate using checksum
                     return
 
                 if inner_custom_header.protocol_id == self.expected_identifier:
@@ -57,5 +59,5 @@ class PacketSniffer:
 
 if __name__ == "__main__":
     expected_identifier = 12345678  # The identifier to filter on
-    sniffer = PacketSniffer(expected_identifier)
+    sniffer = Server(expected_identifier)
     sniffer.start_sniffing()

@@ -1,8 +1,11 @@
 from scapy.all import send
-from utils.packet_utils import logger, CustomHeader
-from utils.packet_handler import PacketHandler
 
-class PacketSender:
+from utils.custom_protocol import CustomProtocol
+from utils.packet_handler import PacketHandler
+from utils.utills import checksum, logger
+
+
+class Client:
     def __init__(self, file_path, identifier, dst_ip="127.0.0.1", src_ip="127.0.0.1", ttl=64, seq_num=1):
         self.file_path = file_path
         self.identifier = identifier
@@ -19,10 +22,10 @@ class PacketSender:
             return
 
         # Create the inner packet and calculate its checksum
-        inner_packet = PacketHandler.create_custom_packet(self.identifier, self.seq_num, file_data)
+        inner_packet = CustomProtocol.create_custom_packet(self.identifier, self.seq_num, file_data)
 
         # Wrap the inner packet in another packet (outer packet) and calculate its checksum
-        outer_packet_checksum = CustomHeader.checksum(inner_packet)  # Generate checksum for the outer packet
+        outer_packet_checksum = checksum(inner_packet)  # Generate checksum for the outer packet
         outer_packet = PacketHandler.create_packet(self.src_ip, self.dst_ip, self.ttl, inner_packet, self.identifier, self.seq_num, outer_packet_checksum)
 
         try:
@@ -36,5 +39,5 @@ if __name__ == "__main__":
     file_path = "sample.txt"  # Replace with your file path
     identifier = 12345678  # Unique identifier (as an example)
 
-    sender = PacketSender(file_path, identifier)
+    sender = Client(file_path, identifier)
     sender.send_packet()

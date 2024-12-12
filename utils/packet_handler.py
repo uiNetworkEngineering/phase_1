@@ -3,8 +3,8 @@ import os
 from scapy.layers.inet import IP
 from scapy.all import Raw
 
-from utils.custom_protocol_header import CustomProtocolHeader
-from utils.packet_utils import logger, CustomHeader
+from utils.packet_utils import CustomHeader
+from utils.utills import  logger
 
 
 class PacketHandler:
@@ -32,13 +32,3 @@ class PacketHandler:
         header = CustomHeader(identifier, timestamp, seq_num,checksum).build_header()
         combined_payload = header + file_data
         return IP(src=src_ip, dst=dst_ip, ttl=ttl) / Raw(combined_payload)
-
-    @staticmethod
-    def create_custom_packet(protocol_id, seq_num, file_data):
-        """Creates a custom protocol packet with a header and the file data."""
-        length = len(file_data)
-        # Calculate checksum for the payload
-        payload_checksum = CustomHeader.checksum(file_data)
-        header = CustomProtocolHeader(protocol_id, length, payload_checksum, seq_num).build_header()
-        combined_payload = header + file_data
-        return combined_payload
