@@ -1,8 +1,6 @@
-import logging
 from scapy.layers.inet import IP
 from scapy.all import sniff, Raw
 from utils.packet_utils import CustomHeader, logger
-
 
 class PacketSniffer:
     def __init__(self, expected_identifier, src_ip="127.0.0.1", dst_ip="127.0.0.1", iface=r"\Device\NPF_Loopback"):
@@ -25,8 +23,7 @@ class PacketSniffer:
             outer_custom_header = CustomHeader.from_bytes(outer_header_bytes)
 
             # Validate outer packet checksum
-            if not CustomHeader.validate_crc32(outer_file_data, outer_custom_header.checksum):
-                logger.error("Outer packet checksum validation failed")
+            if CustomHeader.checksum(outer_file_data) != outer_custom_header.checksum:  # Validate using checksum
                 return
 
             if outer_custom_header.identifier == self.expected_identifier:
@@ -43,7 +40,7 @@ class PacketSniffer:
                     inner_custom_header = CustomHeader.from_bytes(inner_header_bytes)
 
                     # Validate inner packet checksum
-                    if not CustomHeader.validate_crc32(inner_raw_data[16:], inner_custom_header.checksum):
+                    if CustomHeader.checksum(inner_raw_data[16:]) != inner_custom_header.checksum:  # Validate using checksum
                         logger.error("Inner packet checksum validation failed")
                         return
 

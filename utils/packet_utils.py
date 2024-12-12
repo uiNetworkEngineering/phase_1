@@ -1,5 +1,5 @@
-import zlib
 import logging
+import struct
 
 logging.basicConfig(level=logging.DEBUG, format="%(asctime)s - %(levelname)s - %(message)s")
 logger = logging.getLogger(__name__)
@@ -30,13 +30,16 @@ class CustomHeader:
         return cls(identifier, timestamp, seq_num, checksum)
 
     @staticmethod
-    def generate_crc32(data):
-        """Generate CRC32 checksum for the provided data."""
-        return zlib.crc32(data) & 0xffffffff
+    def checksum(data):
+        """Calculate the one's complement checksum."""
+        if len(data) % 2 == 1:
+            data += b'\0'  # If odd, pad with a zero byte
+        s = sum(struct.unpack('!%sH' % (len(data) // 2), data))  # Unpack as 16-bit words
+        s = (s >> 16) + (s & 0xFFFF)  # Add the carry bits
+        s += (s >> 16)  # Add carry if necessary
+        return ~s & 0xFFFF  # Return one's complement
 
     @staticmethod
-    def validate_crc32(data, expected_crc32):
-        """Validate the CRC32 checksum of the given data."""
-        calculated_crc32 = zlib.crc32(data) & 0xffffffff
-        return calculated_crc32 == expected_crc32
-
+    def calculate_ip_checksum(ip_header):
+        """Calculate checksum for an IP header."""
+        return CustomHeader.checksum(ip_header)
