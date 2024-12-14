@@ -1,32 +1,103 @@
 import logging
+import os
 import struct
+from scapy.layers.inet import IP
+from scapy.packet import Raw
+from scapy.sendrecv import send
 
-logging.basicConfig(level=logging.DEBUG, format="%(asctime)s - %(levelname)s - %(message)s")
-logger = logging.getLogger(__name__)
 
+class PacketHandler:
+    """Handles packet operations like reading files, creating packets, etc."""
+
+    def __init__(self, logger_service=None):
+        self.logger_service = logger_service or LoggerService()
+
+    @staticmethod
+    def read_file(file_path):
+        """Reads the content of a file and returns its data as bytes."""
+        try:
+            if not os.path.exists(file_path):
+                raise FileNotFoundError(f"File not found: {file_path}")
+            with open(file_path, "rb") as file:
+                file_data = file.read()
+            return file_data
+        except Exception as e:
+            raise Exception(f"Error reading file {file_path}: {e}")
+
+    @staticmethod
+    def create_packet(src_ip, dst_ip, ttl, file_data, identifier):
+        """Creates an IP packet with a custom header and the file data as payload."""
+        # Create an IP packet
+        ip_packet = IP(src=src_ip, dst=dst_ip, ttl=ttl, version=4, id=identifier)
+
+        # Wrap the file data into a Raw layer to serve as the payload
+        raw_payload = Raw(load=file_data)
+
+        # Combine the IP packet and the payload
+        packet = ip_packet / raw_payload
+
+        return packet
+
+    def log_packet_info(self, packet):
+        """Logs packet information for debugging."""
+        self.logger_service.log_info(f"Packet created: {packet.summary()}")
+        self.logger_service.log_debug(f"Packet details: {packet.show()}")
+
+# Service to handle logging and error reporting
+class LoggerService:
+    def __init__(self, name=__name__):
+        self.logger = logging.getLogger(name)
+        logging.basicConfig(level=logging.DEBUG, format="%(asctime)s - %(levelname)s - %(message)s")
+
+    def log_info(self, message):
+        self.logger.info(message)
+
+    def log_error(self, message):
+        self.logger.error(message)
+
+    def log_debug(self, message):
+        self.logger.debug(message)
+
+
+# Service for handling common packet operations
+class PacketService:
+    def __init__(self, logger_service):
+        self.logger_service = logger_service
+
+    def validate_checksum(self, packet, raw_ip_header):
+        """Validate the checksum of the packet."""
+        calculated_checksum = checksum(raw_ip_header)
+        if int(calculated_checksum) != int(packet[IP].chksum):
+            self.logger_service.log_error(f"Checksum mismatch: {packet[IP].chksum} != {calculated_checksum}")
+            return False
+        return True
+
+    def create_outer_packet(self, src_ip, dst_ip, ttl, file_data, identifier):
+        """Creates the outer packet by wrapping the file data into an IP packet."""
+        inner_packet = PacketHandler.create_packet(src_ip, dst_ip, ttl, file_data, identifier)
+        outer_packet_data = inner_packet.build()
+        return PacketHandler.create_packet(src_ip, dst_ip, ttl, outer_packet_data, identifier)
+
+    def send_packet(self, packet):
+        """Sends the packet."""
+        try:
+            send(packet)
+        except Exception as e:
+            self.logger_service.log_error(f"Error sending packet: {e}")
+
+
+# Utility function to calculate checksum
 def checksum(data):
     """Calculate the one's complement checksum."""
-    # Ensure the length of data is even by padding with a zero byte if odd
     if len(data) % 2 == 1:
         data += b'\0'
 
-    # Zero out the checksum field (last 2 bytes of the IP header, 20 bytes total)
-    # In a real IP header, the checksum would be set to 0 for calculation
     data = data[:10] + b'\x00\x00' + data[12:]
 
-    # Unpack the data into 16-bit words
     unpacked_data = struct.unpack('!%sH' % (len(data) // 2), data)
-
-    # Sum the 16-bit words
     s = sum(unpacked_data)
-
-    # Add the carry bits (if any) and fold the sum into 16 bits
     s = (s >> 16) + (s & 0xFFFF)
-
-    # Add carry if necessary (in case we have another overflow)
     s += (s >> 16)
 
-    # Return the one's complement of the sum
-    result = ~s & 0xFFFF
+    return ~s & 0xFFF
 
-    return result

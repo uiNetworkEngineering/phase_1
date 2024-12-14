@@ -1,69 +1,62 @@
-from scapy.all import send
 from scapy.layers.inet import IP
 from scapy.sendrecv import sniff
 
-from utils.packet_utils import PacketHandler, logger
-from utils.utills import checksum
+from utils.utills import LoggerService, PacketService, PacketHandler
 
 
 class PacketSender:
-    def __init__(self, file_path, identifier, dst_ip="127.0.0.1", src_ip="127.0.0.1", ttl=64):
+    def __init__(self, file_path, identifier, dst_ip="127.0.0.1", src_ip="127.0.0.1", ttl=64, logger_service=None, packet_service=None):
         self.file_path = file_path
-        self.identifier = identifier
+        self.id = identifier
         self.dst_ip = dst_ip
         self.src_ip = src_ip
         self.ttl = ttl
+        self.logger_service = logger_service or LoggerService()
+        self.packet_service = packet_service or PacketService(self.logger_service)
+        self.packet_received = False  # Track if the packet has been received
 
     def send_packet(self):
         """Reads the file, creates the inner packet, wraps it in another packet, and sends it."""
         file_data = PacketHandler.read_file(self.file_path)
         if not file_data:
-            print(f"Error: No data to send from the file '{self.file_path}'")
+            self.logger_service.log_error(f"Error: No data to send from the file '{self.file_path}'")
             return
 
-        # Create the inner packet
-        inner_packet = PacketHandler.create_packet(self.src_ip, self.dst_ip, self.ttl, file_data, self.identifier)
+        # Create and send the outer packet
+        outer_packet = self.packet_service.create_outer_packet(self.src_ip, self.dst_ip, self.ttl, file_data, self.id)
+        self.packet_service.send_packet(outer_packet)
 
-        # Wrap the inner packet in another packet (outer packet)
-        outer_packet_data = inner_packet.build()
-        print(outer_packet_data[20:])  # Display the payload of the inner packet
-
-        outer_packet = PacketHandler.create_packet(self.src_ip, self.dst_ip, self.ttl, outer_packet_data, self.identifier)
-
+    def start_sniffing(self):
+        """Starts sniffing packets on the specified interface."""
+        self.logger_service.log_info(f"Packet sent, looking for inner packet with ID: {self.id}...")
         try:
-            send(outer_packet)
+            sniff(prn=self.get_inner_packet, filter="ip", store=0, iface=r"\Device\NPF_Loopback", stop_filter=self.should_stop_sniffing)
         except Exception as e:
-            print(f"Error sending packet: {e}")
-            logger.error(f"Error sending packet: {e}")
-    def get_inner_packet(self,packet):
-        if packet.haslayer(IP) and packet[IP].id == self.identifier:
+            self.logger_service.log_error(f"Error sniffing packets: {e}")
+
+    def get_inner_packet(self, packet):
+        """Extract the inner packet from the sniffed outer packet."""
+        if packet.haslayer(IP) and packet[IP].id == self.id:
             ip_header = packet[IP]
             raw_ip_header = bytes(ip_header)[:20]  # First 20 bytes for the IPv4 header
 
-            # Clear the checksum field (bytes 10-11) and calculate the checksum
-            raw_ip_header = raw_ip_header[:10] + b'\x00\x00' + raw_ip_header[12:]
-            calculated_checksum = checksum(raw_ip_header)
-
-            # Check if the calculated checksum matches the packet's checksum
-            if int(calculated_checksum) == int(packet[IP].chksum):
+            # Validate checksum
+            if self.packet_service.validate_checksum(packet, raw_ip_header):
                 inner_packet = ip_header.load
-                print(inner_packet)
+                self.logger_service.log_info(f"Retrieved packet: {inner_packet}")
+                self.packet_received = True  # Mark that the packet was received
             else:
-                print(f"Checksum mismatch: {packet[IP].chksum} != {calculated_checksum}")
-    def start_sniffing(self):
-        """Starts sniffing packets on the specified interface."""
-        print(f"packet sent, looking for inner packet with ID: {self.identifier}...")
-        try:
-            sniff(prn=self.get_inner_packet, filter="ip", store=0, iface=r"\Device\NPF_Loopback")
-        except Exception as e:
-            logger.error(f"Error sniffing packets: {e}")
-            print(f"Error sniffing packets: {e}")
+                self.logger_service.log_error(f"Checksum mismatch for packet ID: {self.id}")
+
+    def should_stop_sniffing(self, packet):
+        """Condition to stop sniffing once the inner packet is received."""
+        return self.packet_received
 
 
 if __name__ == "__main__":
     file_path = "sample.txt"  # Replace with your file path
-    identifier = 65535  # Unique identifier (as an example)
+    id = 65535  # Unique identifier (as an example)
 
-    sender = PacketSender(file_path, identifier)
+    sender = PacketSender(file_path, id)
     sender.send_packet()
     sender.start_sniffing()
