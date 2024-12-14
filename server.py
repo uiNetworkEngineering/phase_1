@@ -1,7 +1,9 @@
 import logging
 from scapy.layers.inet import IP
-from scapy.all import sniff, Raw
-from utils.packet_utils import CustomHeader, logger
+from scapy.all import sniff
+from scapy.sendrecv import send
+
+from utils.packet_utils import logger
 from utils.utills import checksum
 
 
@@ -14,23 +16,21 @@ class PacketSniffer:
 
     def process_packet(self, packet):
         """Processes the captured packet, unwraps it, and checks for the custom header."""
-        if packet.haslayer(IP):
-            if packet[IP].id == 65535:
-                ip_header = packet[IP]
-                raw_ip_header = bytes(ip_header)[:20]  # First 20 bytes for the IPv4 header
+        if packet.haslayer(IP) and packet[IP].id == self.expected_identifier:
+            ip_header = packet[IP]
+            raw_ip_header = bytes(ip_header)[:20]  # First 20 bytes for the IPv4 header
 
-                # Set the checksum field to 0 to calculate the checksum
-                raw_ip_header = raw_ip_header[:10] + b'\x00\x00' + raw_ip_header[12:]  # Clear the checksum field (bytes 10-11)
+            # Clear the checksum field (bytes 10-11) and calculate the checksum
+            raw_ip_header = raw_ip_header[:10] + b'\x00\x00' + raw_ip_header[12:]
+            calculated_checksum = checksum(raw_ip_header)
 
-                # Calculate the checksum over the header (excluding the checksum field)
-                calculated_checksum = checksum(raw_ip_header)
-
-                if int(calculated_checksum) == int(packet[IP].chksum):
-                    inner_packet = ip_header.load
-                    print(inner_packet)
-                else:
-                    print(packet[IP].chksum)
-                    print(calculated_checksum)
+            # Check if the calculated checksum matches the packet's checksum
+            if int(calculated_checksum) == int(packet[IP].chksum):
+                inner_packet = ip_header.load
+                ip_packet = IP(inner_packet)
+                send(ip_packet)
+            else:
+                print(f"Checksum mismatch: {packet[IP].chksum} != {calculated_checksum}")
 
     def start_sniffing(self):
         """Starts sniffing packets on the specified interface."""
@@ -43,6 +43,6 @@ class PacketSniffer:
 
 
 if __name__ == "__main__":
-    expected_identifier = '08b65b5117a67eca'  # The identifier to filter on
+    expected_identifier = 65535  # The identifier to filter on
     sniffer = PacketSniffer(expected_identifier)
     sniffer.start_sniffing()

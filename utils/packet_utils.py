@@ -1,12 +1,6 @@
-import hashlib
-import time
 import os
-import uuid
-
-from scapy.layers.inet import IP
-from scapy.all import Raw
 import logging
-
+from scapy.layers.inet import IP
 from utils.utills import checksum
 
 logging.basicConfig(level=logging.DEBUG, format="%(asctime)s - %(levelname)s - %(message)s")
@@ -48,21 +42,17 @@ class PacketHandler:
     @staticmethod
     def create_packet(src_ip, dst_ip, ttl, file_data, identifier):
         """Creates an IP packet with a custom header and the file data."""
-
         result = IP(src=src_ip, dst=dst_ip, ttl=ttl, version=4, id=65535)
 
         # Add the custom header and file data as payload
         result.add_payload(file_data)
 
-        # Now the packet is constructed. We need to compute the checksum over the first 20 bytes of the header.
+        # Calculate checksum over the first 20 bytes of the IP header (without the checksum)
         raw_ip_header = bytes(result)  # Get the raw packet including the payload
         result.chksum = 0  # Set checksum to 0 before calculating
-
-        # Calculate checksum over the first 20 bytes of the IP header (without the checksum)
         calculated_checksum = checksum(raw_ip_header[:20])  # Only the first 20 bytes (IP header)
 
         # Set the checksum in the IP header
         result.chksum = calculated_checksum
 
         return result
-

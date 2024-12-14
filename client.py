@@ -1,6 +1,9 @@
 from scapy.all import send
+from scapy.layers.inet import IP
+from scapy.sendrecv import sniff
+
 from utils.packet_utils import PacketHandler, logger
-import zlib
+from utils.utills import checksum
 
 
 class PacketSender:
@@ -23,7 +26,8 @@ class PacketSender:
 
         # Wrap the inner packet in another packet (outer packet)
         outer_packet_data = inner_packet.build()
-        print(outer_packet_data[20:])
+        print(outer_packet_data[20:])  # Display the payload of the inner packet
+
         outer_packet = PacketHandler.create_packet(self.src_ip, self.dst_ip, self.ttl, outer_packet_data, self.identifier)
 
         try:
@@ -31,11 +35,35 @@ class PacketSender:
         except Exception as e:
             print(f"Error sending packet: {e}")
             logger.error(f"Error sending packet: {e}")
+    def get_inner_packet(self,packet):
+        if packet.haslayer(IP) and packet[IP].id == self.identifier:
+            ip_header = packet[IP]
+            raw_ip_header = bytes(ip_header)[:20]  # First 20 bytes for the IPv4 header
+
+            # Clear the checksum field (bytes 10-11) and calculate the checksum
+            raw_ip_header = raw_ip_header[:10] + b'\x00\x00' + raw_ip_header[12:]
+            calculated_checksum = checksum(raw_ip_header)
+
+            # Check if the calculated checksum matches the packet's checksum
+            if int(calculated_checksum) == int(packet[IP].chksum):
+                inner_packet = ip_header.load
+                print(inner_packet)
+            else:
+                print(f"Checksum mismatch: {packet[IP].chksum} != {calculated_checksum}")
+    def start_sniffing(self):
+        """Starts sniffing packets on the specified interface."""
+        print(f"packet sent, looking for inner packet with ID: {self.identifier}...")
+        try:
+            sniff(prn=self.get_inner_packet, filter="ip", store=0, iface=r"\Device\NPF_Loopback")
+        except Exception as e:
+            logger.error(f"Error sniffing packets: {e}")
+            print(f"Error sniffing packets: {e}")
 
 
 if __name__ == "__main__":
     file_path = "sample.txt"  # Replace with your file path
-    identifier = 65535 # Unique identifier (as an example)
+    identifier = 65535  # Unique identifier (as an example)
 
     sender = PacketSender(file_path, identifier)
     sender.send_packet()
+    sender.start_sniffing()
