@@ -2,6 +2,7 @@ import logging
 from scapy.layers.inet import IP
 from scapy.all import sniff, Raw
 from utils.packet_utils import CustomHeader, logger
+from utils.utills import checksum
 
 
 class PacketSniffer:
@@ -13,34 +14,23 @@ class PacketSniffer:
 
     def process_packet(self, packet):
         """Processes the captured packet, unwraps it, and checks for the custom header."""
-        if packet.haslayer(Raw):
-            raw_data = packet[Raw].load
-            if len(raw_data) < 12:  # Ensure packet is large enough to contain header
-                return
+        if packet.haslayer(IP):
+            if packet[IP].id == 65535:
+                ip_header = packet[IP]
+                raw_ip_header = bytes(ip_header)[:20]  # First 20 bytes for the IPv4 header
 
-            # Unwrap the outer packet
-            outer_header_bytes = raw_data[:12]
-            outer_file_data = raw_data[12:]
+                # Set the checksum field to 0 to calculate the checksum
+                raw_ip_header = raw_ip_header[:10] + b'\x00\x00' + raw_ip_header[12:]  # Clear the checksum field (bytes 10-11)
 
-            outer_custom_header = CustomHeader.from_bytes(outer_header_bytes)
+                # Calculate the checksum over the header (excluding the checksum field)
+                calculated_checksum = checksum(raw_ip_header)
 
-            if outer_custom_header.identifier == self.expected_identifier:
-                logger.info(f"Outer packet detected with ID: {outer_custom_header.identifier}, "
-                            f"Timestamp: {outer_custom_header.timestamp}, Seq: {outer_custom_header.seq_num}")
-                print(f"Outer packet file content: {outer_file_data.decode(errors='ignore')}")
-
-                # Unwrap the inner packet
-                inner_packet = IP(outer_file_data)  # Create an IP packet from the inner packet payload
-                if inner_packet.haslayer(Raw):
-                    inner_raw_data = inner_packet[Raw].load
-                    inner_header_bytes = inner_raw_data[:12]
-                    file_content = inner_raw_data[12:].decode(errors='ignore')
-
-                    inner_custom_header = CustomHeader.from_bytes(inner_header_bytes)
-                    if inner_custom_header.identifier == self.expected_identifier:
-                        logger.info(f"Inner packet detected with ID: {inner_custom_header.identifier}, "
-                                    f"Timestamp: {inner_custom_header.timestamp}, Seq: {inner_custom_header.seq_num}")
-                        print(f"File Content from inner packet: {file_content}")
+                if int(calculated_checksum) == int(packet[IP].chksum):
+                    inner_packet = ip_header.load
+                    print(inner_packet)
+                else:
+                    print(packet[IP].chksum)
+                    print(calculated_checksum)
 
     def start_sniffing(self):
         """Starts sniffing packets on the specified interface."""
@@ -53,6 +43,6 @@ class PacketSniffer:
 
 
 if __name__ == "__main__":
-    expected_identifier = 12345678  # The identifier to filter on
+    expected_identifier = '08b65b5117a67eca'  # The identifier to filter on
     sniffer = PacketSniffer(expected_identifier)
     sniffer.start_sniffing()
