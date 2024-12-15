@@ -30,12 +30,15 @@ class PacketHandler:
         # Create an IP packet
         ip_packet = IP(src=src_ip, dst=dst_ip, ttl=ttl, version=4, id=identifier)
 
-        # Wrap the file data into a Raw layer to serve as the payload
         raw_payload = Raw(load=file_data)
 
         # Combine the IP packet and the payload
         packet = ip_packet / raw_payload
 
+        # Wrap the file data into a Raw layer to serve as the payload
+        raw_ip_header = bytes(ip_packet)  # Get the raw packet including the payload
+        calculated_checksum = checksum(raw_ip_header[:20])
+        ip_packet.chksum = calculated_checksum
         return packet
 
     def log_packet_info(self, packet):
@@ -86,18 +89,20 @@ class PacketService:
             self.logger_service.log_error(f"Error sending packet: {e}")
 
 
-# Utility function to calculate checksum
 def checksum(data):
     """Calculate the one's complement checksum."""
+    # If the length is odd, add a padding byte
     if len(data) % 2 == 1:
         data += b'\0'
 
+    # Zero out the checksum field (bytes 10 and 11 in the IP header)
     data = data[:10] + b'\x00\x00' + data[12:]
 
+    # Unpack the data into 16-bit words (big-endian format)
     unpacked_data = struct.unpack('!%sH' % (len(data) // 2), data)
+
+    # Calculate the checksum by summing the words and applying the one's complement
     s = sum(unpacked_data)
-    s = (s >> 16) + (s & 0xFFFF)
-    s += (s >> 16)
-
-    return ~s & 0xFFF
-
+    s = (s >> 16) + (s & 0xFFFF)  # Add carry
+    s += (s >> 16)  # Add carry again if any
+    return ~s & 0xFFFF  # Return one's complement, masked to 16 bits
