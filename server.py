@@ -1,11 +1,9 @@
-import struct
-
 from scapy.all import sniff
-from scapy.layers.inet import IP, IPOption
-from scapy.packet import Raw
+from scapy.layers.inet import IP
+
 
 from utils.control_layer import CustomLayer
-from utils.utills import LoggerService, PacketService
+from utils.utills import LoggerService, PacketService, PacketHandler
 
 
 class PacketSniffer:
@@ -27,12 +25,17 @@ class PacketSniffer:
             # Validate checksum
             if self.packet_service.validate_checksum(packet, raw_ip_header):
                 custom_layer = CustomLayer(packet[IP].load)
-                # custom_layer.show()
                 inner_packet = custom_layer.load
                 ip_packet = IP(inner_packet)
-                ip_packet.show()
+                inner_custom_layer = CustomLayer(ip_packet.load)
+
+                ip_packet = ip_packet
+
+                print(inner_custom_layer.chunk_number)
+
                 self.packet_service.send_packet(ip_packet)
-                self.packet_received = True  # Mark the packet as received
+                if inner_custom_layer.chunk_number == 0:
+                   self.packet_received = True
             else:
                 self.logger_service.log_error(f"Invalid checksum for packet ID: {self.id}")
 

@@ -35,10 +35,7 @@ class PacketHandler:
         ip_packet = IP(src=src_ip, dst=dst_ip, ttl=ttl, version=4, id=identifier)
 
         # Create the Raw payload with the file data
-        control_layer = CustomLayer(chunk_number=22,load=file_data)
-
-        print(len(control_layer))
-        print(len(ip_packet))
+        control_layer = CustomLayer(chunk_number=chunk_number,load=file_data)
 
         packet = ip_packet / control_layer
         calculated_checksum = checksum(bytes(packet)[:20])

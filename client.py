@@ -6,7 +6,7 @@ from utils.utills import LoggerService, PacketService, PacketHandler
 
 
 class PacketSender:
-    def __init__(self, file_path, identifier, dst_ip="127.0.0.1", src_ip="127.0.0.1", ttl=64, logger_service=None, packet_service=None, chunks_length= 10):
+    def __init__(self, file_path, identifier, dst_ip="127.0.0.1", src_ip="127.0.0.1", ttl=64, logger_service=None, packet_service=None, chunks_length= 50):
         self.file_path = file_path
         self.id = identifier
         self.dst_ip = dst_ip
@@ -24,13 +24,14 @@ class PacketSender:
             self.logger_service.log_error(f"Error: No data to send from the file '{self.file_path}'")
             return
 
-        if len(file_data) > 10:
+        if len(file_data) > self.chunks_length:
             chunks = [file_data[i:i + self.chunks_length] for i in range(0, len(file_data), self.chunks_length)]
 
             # Print the chunks
             for idx, chunk in enumerate(chunks):
                 outer_packet = self.packet_service.create_outer_packet(self.src_ip, self.dst_ip, self.ttl, chunk,
-                                                                       self.id,10)
+                                                                       self.id,len(chunks) - 1 - idx)
+
                 self.packet_service.send_packet(outer_packet)
                 break
 
@@ -58,7 +59,9 @@ class PacketSender:
                 custom_layer = CustomLayer(ip_header.load)
                 inner_packet = custom_layer.load
                 self.logger_service.log_info(f"Retrieved packet: {inner_packet}")
-                self.packet_received = True  # Mark that the packet was received
+                if custom_layer.chunk_number == 0:
+                    self.packet_received = True  # Mark that the packet was received
+
             else:
                 self.logger_service.log_error(f"Checksum mismatch for packet ID: {self.id}")
 
