@@ -1,6 +1,10 @@
-from scapy.all import sniff
-from scapy.layers.inet import IP
+import struct
 
+from scapy.all import sniff
+from scapy.layers.inet import IP, IPOption
+from scapy.packet import Raw
+
+from utils.control_layer import CustomLayer
 from utils.utills import LoggerService, PacketService
 
 
@@ -22,8 +26,11 @@ class PacketSniffer:
 
             # Validate checksum
             if self.packet_service.validate_checksum(packet, raw_ip_header):
-                inner_packet = outer_packet.load
+                custom_layer = CustomLayer(packet[IP].load)
+                # custom_layer.show()
+                inner_packet = custom_layer.load
                 ip_packet = IP(inner_packet)
+                ip_packet.show()
                 self.packet_service.send_packet(ip_packet)
                 self.packet_received = True  # Mark the packet as received
             else:
