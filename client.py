@@ -6,7 +6,7 @@ from utils.utills import LoggerService, PacketService, PacketHandler
 
 
 class PacketSender:
-    def __init__(self, file_path, identifier, dst_ip="127.0.0.1", src_ip="127.0.0.1", ttl=64, logger_service=None, packet_service=None, chunks_length= 50,seq_number= 1):
+    def __init__(self, file_path, identifier, dst_ip="127.0.0.1", src_ip="127.0.0.1", ttl=64, logger_service=None, packet_service=None, chunks_length= 20,seq_number= 1):
         self.file_path = file_path
         self.id = identifier
         self.dst_ip = dst_ip
@@ -59,12 +59,11 @@ class PacketSender:
             raw_ip_header = bytes(ip_header)[:20]  # First 20 bytes for the IPv4 header
 
             # Validate checksum
-            # if self.packet_service.validate_checksum(packet, raw_ip_header):
-            custom_layer = CustomLayer(ip_header.load)
-            inner_packet = custom_layer.load
+            if self.packet_service.validate_checksum(packet, raw_ip_header):
+                custom_layer = CustomLayer(ip_header.load)
+                inner_packet = custom_layer.load
 
-            print(inner_packet)
-            self.logger_service.log_info(f"Retrieved packet: {inner_packet}")
+                self.logger_service.log_info(f"Retrieved packet: {inner_packet}")
 
             # Print the chunks
             if self.chunk_number < len(self.chunks):

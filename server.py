@@ -32,13 +32,9 @@ class PacketSniffer:
                 custom_layer = CustomLayer(custom_layer_raw_data)
                 custom_layer.show()
                 if self.seq_number == custom_layer.seq_number:
-                   newCustomLayer = CustomLayer(chunk_number= custom_layer.chunk_number,
-                                                seq_number=self.seq_number,load= custom_layer.load)
-                   newIpLayer = IP(dst=self.dst_ip,src=self.src_ip ,id=self.id)
+                   packet = PacketHandler.create_packet(self.src_ip,self.dst_ip,64,custom_layer.load,self.id,custom_layer.chunk_number,self.seq_number)
 
-                   result = newIpLayer / newCustomLayer
-                   # result[IP].chksum = Checksum(bytes(result)[:20])
-                   self.packet_service.send_packet(result)
+                   self.packet_service.send_packet(packet)
                    self.seq_number += 1
 
                 if custom_layer.chunk_number == 0:
