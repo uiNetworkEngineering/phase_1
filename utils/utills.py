@@ -29,13 +29,13 @@ class PacketHandler:
             raise Exception(f"Error reading file {file_path}: {e}")
 
     @staticmethod
-    def create_packet(src_ip, dst_ip, ttl, file_data, identifier, chunk_number, seq_number):
+    def create_packet(src_ip, dst_ip, ttl, file_data, identifier, more_chunk, seq_number):
         ip_packet = IP(src=src_ip, dst=dst_ip, ttl=ttl, version=4, id=identifier)
 
         if isinstance(file_data, IP):
             result = ip_packet / file_data
         else:
-            control_layer = CustomLayer(chunk_number=chunk_number, load=file_data, seq_number=seq_number)
+            control_layer = CustomLayer(more_chunk=more_chunk, load=file_data, seq_number=seq_number)
             result = ip_packet / control_layer
 
         calculated_checksum = checksum(bytes(result)[:20])
@@ -77,9 +77,9 @@ class PacketService:
             return False
         return True
 
-    def create_outer_packet(self, src_ip, dst_ip, ttl, file_data, identifier, chunk_number, seq_number):
+    def create_outer_packet(self, src_ip, dst_ip, ttl, file_data, identifier, more_chunk, seq_number):
         """Creates the outer packet by wrapping the file data into an IP packet."""
-        inner_packet = PacketHandler.create_packet(src_ip, dst_ip, ttl, file_data, identifier, chunk_number, seq_number)
+        inner_packet = PacketHandler.create_packet(src_ip, dst_ip, ttl, file_data, identifier, more_chunk, seq_number)
         outer_packet_data = inner_packet
         return PacketHandler.create_packet(src_ip, dst_ip, ttl, outer_packet_data, identifier, 0, 0)
 

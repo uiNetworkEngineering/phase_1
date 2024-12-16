@@ -32,7 +32,7 @@ class PacketSender:
 
             # Print the chunks
             outer_packet = self.packet_service.create_outer_packet(self.src_ip, self.dst_ip, self.ttl, self.chunks[self.chunk_number],
-                                                                       self.id,len(self.chunks) - 1,1)
+                                                                       self.id,1,1)
 
             self.packet_service.send_packet(outer_packet)
 
@@ -64,20 +64,23 @@ class PacketSender:
                 inner_packet = custom_layer.load
 
                 self.logger_service.log_info(f"Retrieved packet: {inner_packet}")
+                # Print the chunks
+                if self.chunk_number < len(self.chunks) - 1:
+                    outer_packet = self.packet_service.create_outer_packet(self.src_ip, self.dst_ip, self.ttl,
+                                                                           self.chunks[self.chunk_number],
+                                                                           self.id, 1, self.seq_number)
+                    self.packet_service.send_packet(outer_packet)
+                elif self.chunk_number == len(self.chunks) - 1:
+                    outer_packet = self.packet_service.create_outer_packet(self.src_ip, self.dst_ip, self.ttl,
+                                                                           self.chunks[self.chunk_number],
+                                                                           self.id, 0, self.seq_number)
+                    self.packet_service.send_packet(outer_packet)
 
-            # Print the chunks
-            if self.chunk_number < len(self.chunks):
-                outer_packet = self.packet_service.create_outer_packet(self.src_ip, self.dst_ip, self.ttl,
-                                                                       self.chunks[self.chunk_number],
-                                                                       self.id, len(self.chunks) - 1 - self.chunk_number, self.seq_number)
+                if custom_layer.more_chunk == 0:
+                    self.packet_received = True  # Mark that the packet was received
 
-                self.packet_service.send_packet(outer_packet)
-
-            # if custom_layer.chunk_number == 0:
-            # self.packet_received = True  # Mark that the packet was received
-
-            # else:
-            #     self.logger_service.log_error(f"Checksum mismatch for packet ID: {self.id}")
+            else:
+                self.logger_service.log_error(f"Checksum mismatch for packet ID: {self.id}")
 
     def should_stop_sniffing(self, packet):
         """Condition to stop sniffing once the inner packet is received."""

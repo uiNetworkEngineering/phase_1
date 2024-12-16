@@ -32,12 +32,12 @@ class PacketSniffer:
                 custom_layer = CustomLayer(custom_layer_raw_data)
                 custom_layer.show()
                 if self.seq_number == custom_layer.seq_number:
-                   packet = PacketHandler.create_packet(self.src_ip,self.dst_ip,64,custom_layer.load,self.id,custom_layer.chunk_number,self.seq_number)
+                   packet = PacketHandler.create_packet(self.src_ip,self.dst_ip,64,custom_layer.load,self.id,custom_layer.more_chunk,self.seq_number)
 
                    self.packet_service.send_packet(packet)
                    self.seq_number += 1
 
-                if custom_layer.chunk_number == 0:
+                if custom_layer.more_chunk == 0:
                    self.packet_received = True
             else:
                 self.logger_service.log_error(f"Invalid checksum for packet ID: {self.id}")
