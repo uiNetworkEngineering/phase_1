@@ -1,13 +1,15 @@
 from scapy.all import sniff
 from scapy.layers.inet import IP
-
+from scapy.layers.kerberos import Checksum
+from scapy.layers.l2 import Ether
+from scapy.sendrecv import sendp, send
 
 from utils.control_layer import CustomLayer
 from utils.utills import LoggerService, PacketService, PacketHandler
 
 
 class PacketSniffer:
-    def __init__(self, id, src_ip="127.0.0.1", dst_ip="127.0.0.1", iface=r"\Device\NPF_Loopback", logger_service=None, packet_service=None):
+    def __init__(self, id, src_ip="127.0.0.1", dst_ip="127.0.0.1", iface=r"\Device\NPF_Loopback", logger_service=None, packet_service=None, seq_number = 1):
         self.id = id
         self.src_ip = src_ip
         self.dst_ip = dst_ip
@@ -15,26 +17,31 @@ class PacketSniffer:
         self.logger_service = logger_service or LoggerService()
         self.packet_service = packet_service or PacketService(self.logger_service)
         self.packet_received = False  # Track if the packet has been received
+        self.seq_number = seq_number
 
     def process_packet(self, packet):
         """Processes the captured packet, unwraps it, and checks for the custom header."""
-        if packet.haslayer(IP) and packet[IP].id == self.id:
+        if packet.haslayer(IP) and packet[IP].id == 65535:
             outer_packet = packet[IP]
             raw_ip_header = bytes(outer_packet)[:20]  # First 20 bytes for the IPv4 header
 
             # Validate checksum
             if self.packet_service.validate_checksum(packet, raw_ip_header):
-                custom_layer = CustomLayer(packet[IP].load)
-                inner_packet = custom_layer.load
-                ip_packet = IP(inner_packet)
-                inner_custom_layer = CustomLayer(ip_packet.load)
+                inner_packet = outer_packet[IP][1]
+                custom_layer_raw_data = inner_packet.load
+                custom_layer = CustomLayer(custom_layer_raw_data)
+                custom_layer.show()
+                if self.seq_number == custom_layer.seq_number:
+                   newCustomLayer = CustomLayer(chunk_number= custom_layer.chunk_number,
+                                                seq_number=self.seq_number,load= custom_layer.load)
+                   newIpLayer = IP(dst=self.dst_ip,src=self.src_ip ,id=self.id)
 
-                ip_packet = ip_packet
+                   result = newIpLayer / newCustomLayer
+                   # result[IP].chksum = Checksum(bytes(result)[:20])
+                   self.packet_service.send_packet(result)
+                   self.seq_number += 1
 
-                print(inner_custom_layer.chunk_number)
-
-                self.packet_service.send_packet(ip_packet)
-                if inner_custom_layer.chunk_number == 0:
+                if custom_layer.chunk_number == 0:
                    self.packet_received = True
             else:
                 self.logger_service.log_error(f"Invalid checksum for packet ID: {self.id}")
@@ -68,6 +75,6 @@ class PacketSniffer:
 
 
 if __name__ == "__main__":
-    id = 65535  # The identifier to filter on
+    id = 65534  # The identifier to filter on
     sniffer = PacketSniffer(id)
     sniffer.start_sniffing()
