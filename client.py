@@ -30,11 +30,11 @@ class PacketSender:
 
 
     @staticmethod
-    def time_exceeded(dict):
+    def time_exceeded(self,dict):
         while True:
             time.sleep(1)
             if dict and not dict.get('packet_received') and dict.get('ack') == 0 and dict.get('last_packet'):
-                send(dict['last_packet'])
+                self.packet_service.send_packet(dict['last_packet'])
 
     def send_packet(self):
         """Reads the file, creates the inner packet, wraps it in another packet, and sends it."""
@@ -120,7 +120,7 @@ if __name__ == "__main__":
     id = 65535  # Unique identifier (as an example)
 
     sender = PacketSender(file_path, id)
-    sender.process = multiprocessing.Process(target=PacketSender.time_exceeded, args=(sender.dict,))
+    sender.process = multiprocessing.Process(target=PacketSender.time_exceeded, args=(sender,sender.dict,))
     sender.send_packet()
     sender.process.start()
     sender.start_sniffing()

@@ -26,11 +26,11 @@ class PacketSniffer:
         self.dict = manager.dict()
 
     @staticmethod
-    def time_exceeded(dict):
+    def time_exceeded(self,dict):
         while True:
             time.sleep(1)
             if dict and not dict.get('packet_received') and dict.get('ack') == 0 and dict.get('last_packet'):
-                send(dict['last_packet'])
+                self.packet_service.send_packet(dict['last_packet'])
 
     def process_packet(self, packet):
         """Processes the captured packet, unwraps it, and checks for the custom header."""
@@ -93,7 +93,7 @@ class PacketSniffer:
 if __name__ == "__main__":
     id = 65534  # The identifier to filter on
     sniffer = PacketSniffer(id)
-    sniffer.process = multiprocessing.Process(target=PacketSniffer.time_exceeded, args=(sniffer.dict,))
+    sniffer.process = multiprocessing.Process(target=PacketSniffer.time_exceeded, args=(sniffer,sniffer.dict,))
 
     sniffer.start_sniffing()
 
