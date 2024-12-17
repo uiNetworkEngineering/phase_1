@@ -1,3 +1,5 @@
+import time
+
 from scapy.all import sniff
 from scapy.layers.inet import IP
 from scapy.layers.kerberos import Checksum
@@ -30,10 +32,11 @@ class PacketSniffer:
                 inner_packet = outer_packet[IP][1]
                 custom_layer_raw_data = inner_packet.load
                 custom_layer = CustomLayer(custom_layer_raw_data)
-                custom_layer.show()
                 if self.seq_number == custom_layer.seq_number:
                    packet = PacketHandler.create_packet(self.src_ip,self.dst_ip,64,custom_layer.load,self.id,custom_layer.more_chunk,self.seq_number)
 
+                   custom_layer.show()
+                   time.sleep(0.5)
                    self.packet_service.send_packet(packet)
                    self.seq_number += 1
 

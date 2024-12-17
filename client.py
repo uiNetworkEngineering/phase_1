@@ -1,5 +1,8 @@
+import multiprocessing
+import time
+
 from scapy.layers.inet import IP
-from scapy.sendrecv import sniff
+from scapy.sendrecv import sniff, send
 
 from utils.control_layer import CustomLayer
 from utils.utills import LoggerService, PacketService, PacketHandler
@@ -20,6 +23,19 @@ class PacketSender:
         self.chunks = []
         self.chunk_number = 0
 
+        self.process = None
+
+        manager = multiprocessing.Manager()
+        self.dict = manager.dict()
+
+
+    @staticmethod
+    def time_exceeded(dict):
+        while True:
+            time.sleep(1)
+            if dict and not dict.get('packet_received') and dict.get('ack') == 0 and dict.get('last_packet'):
+                send(dict['last_packet'])
+
     def send_packet(self):
         """Reads the file, creates the inner packet, wraps it in another packet, and sends it."""
         file_data = PacketHandler.read_file(self.file_path)
@@ -35,11 +51,16 @@ class PacketSender:
                                                                        self.id,1,1)
 
             self.packet_service.send_packet(outer_packet)
+            self.dict['last_packet'] = outer_packet
+            self.dict['ack'] = 0
+
 
         else:
             outer_packet = self.packet_service.create_outer_packet(self.src_ip, self.dst_ip, self.ttl, file_data,
                                                                    self.id,0,0)
             self.packet_service.send_packet(outer_packet)
+            self.dict['last_packet'] = outer_packet
+            self.dict['ack'] = 0
 
     def start_sniffing(self):
         """Starts sniffing packets on the specified interface."""
@@ -52,6 +73,7 @@ class PacketSender:
     def get_inner_packet(self, packet):
         """Extract the inner packet from the sniffed outer packet."""
         if packet.haslayer(IP) and packet[IP].id == 65534:
+            self.dict['ack'] = 1
             self.seq_number += 1
             self.chunk_number += 1
 
@@ -70,14 +92,20 @@ class PacketSender:
                                                                            self.chunks[self.chunk_number],
                                                                            self.id, 1, self.seq_number)
                     self.packet_service.send_packet(outer_packet)
+                    self.dict['last_packet'] = outer_packet
+                    self.dict['ack'] = 0
+
                 elif self.chunk_number == len(self.chunks) - 1:
                     outer_packet = self.packet_service.create_outer_packet(self.src_ip, self.dst_ip, self.ttl,
                                                                            self.chunks[self.chunk_number],
                                                                            self.id, 0, self.seq_number)
                     self.packet_service.send_packet(outer_packet)
-
+                    self.dict['last_packet'] = outer_packet
+                    self.dict['ack'] = 0
                 if custom_layer.more_chunk == 0:
                     self.packet_received = True  # Mark that the packet was received
+                    self.dict['packet_received'] = True
+                    self.process.terminate()
 
             else:
                 self.logger_service.log_error(f"Checksum mismatch for packet ID: {self.id}")
@@ -92,5 +120,7 @@ if __name__ == "__main__":
     id = 65535  # Unique identifier (as an example)
 
     sender = PacketSender(file_path, id)
+    sender.process = multiprocessing.Process(target=PacketSender.time_exceeded, args=(sender.dict,))
     sender.send_packet()
+    sender.process.start()
     sender.start_sniffing()
