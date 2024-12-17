@@ -8,7 +8,7 @@ from utils.control_layer import CustomLayer
 from utils.utills import LoggerService, PacketService, PacketHandler
 
 
-class PacketSniffer:
+class Server:
     def __init__(self, id, src_ip="127.0.0.1", dst_ip="127.0.0.1", iface=r"\Device\NPF_Loopback", logger_service=None, packet_service=None, seq_number=1):
         self.id = id
         self.src_ip = src_ip
@@ -82,7 +82,7 @@ class PacketSniffer:
 
 if __name__ == "__main__":
     id = 65534
-    sniffer = PacketSniffer(id)
-    sniffer.process = multiprocessing.Process(target=PacketSniffer.time_exceeded, args=(sniffer, sniffer.dict,))
+    server = Server(id)
+    server.process = multiprocessing.Process(target=Server.time_exceeded, args=(server, server.dict,))
 
-    sniffer.start_sniffing()
+    server.start_sniffing()

@@ -5,7 +5,7 @@ from scapy.sendrecv import sniff, send
 from utils.control_layer import CustomLayer
 from utils.utills import LoggerService, PacketService, PacketHandler
 
-class PacketSender:
+class Client:
     def __init__(self, file_path, identifier, dst_ip="127.0.0.1", src_ip="127.0.0.1", ttl=64, logger_service=None, packet_service=None, chunks_length=20, seq_number=1):
         self.file_path = file_path
         self.id = identifier
@@ -105,8 +105,8 @@ if __name__ == "__main__":
     file_path = "sample.txt"
     id = 65535
 
-    sender = PacketSender(file_path, id)
-    sender.process = multiprocessing.Process(target=PacketSender.time_exceeded, args=(sender, sender.dict,))
-    sender.send_packet()
-    sender.process.start()
-    sender.start_sniffing()
+    client = Client(file_path, id)
+    client.process = multiprocessing.Process(target=Client.time_exceeded, args=(client, client.dict,))
+    client.send_packet()
+    client.process.start()
+    client.start_sniffing()
