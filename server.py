@@ -1,10 +1,9 @@
+import multiprocessing
 import time
 
 from scapy.all import sniff
 from scapy.layers.inet import IP
-from scapy.layers.kerberos import Checksum
-from scapy.layers.l2 import Ether
-from scapy.sendrecv import sendp, send
+from scapy.sendrecv import send
 
 from utils.control_layer import CustomLayer
 from utils.utills import LoggerService, PacketService, PacketHandler
@@ -21,6 +20,18 @@ class PacketSniffer:
         self.packet_received = False  # Track if the packet has been received
         self.seq_number = seq_number
 
+        self.process = None
+
+        manager = multiprocessing.Manager()
+        self.dict = manager.dict()
+
+    @staticmethod
+    def time_exceeded(dict):
+        while True:
+            time.sleep(1)
+            if dict and not dict.get('packet_received') and dict.get('ack') == 0 and dict.get('last_packet'):
+                send(dict['last_packet'])
+
     def process_packet(self, packet):
         """Processes the captured packet, unwraps it, and checks for the custom header."""
         if packet.haslayer(IP) and packet[IP].id == 65535:
@@ -36,12 +47,16 @@ class PacketSniffer:
                    packet = PacketHandler.create_packet(self.src_ip,self.dst_ip,64,custom_layer.load,self.id,custom_layer.more_chunk,self.seq_number)
 
                    custom_layer.show()
-                   time.sleep(0.5)
+                   # time.sleep(0.5)
                    self.packet_service.send_packet(packet)
+                   self.dict['last_packet'] = packet
+                   self.dict['ack'] = 0
                    self.seq_number += 1
 
                 if custom_layer.more_chunk == 0:
                    self.packet_received = True
+                   self.dict['packet_received'] = True
+                   self.process.terminate()
             else:
                 self.logger_service.log_error(f"Invalid checksum for packet ID: {self.id}")
 
@@ -50,6 +65,8 @@ class PacketSniffer:
         self.logger_service.log_info(f"Sniffer is running, looking for outer packet with ID: {self.id}...")
         try:
             # Use `sniff` with stop_filter condition to stop once the packet is received
+            self.process.start()
+
             sniff(prn=self.process_packet, filter="ip", store=0, iface=self.iface, stop_filter=self.should_stop_sniffing)
         except Exception as e:
             self.logger_service.log_error(f"Error sniffing packets: {e}")
@@ -76,4 +93,7 @@ class PacketSniffer:
 if __name__ == "__main__":
     id = 65534  # The identifier to filter on
     sniffer = PacketSniffer(id)
+    sniffer.process = multiprocessing.Process(target=PacketSniffer.time_exceeded, args=(sniffer.dict,))
+
     sniffer.start_sniffing()
+
