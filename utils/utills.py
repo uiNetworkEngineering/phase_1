@@ -24,7 +24,6 @@ class PacketHandler:
         except Exception as e:
             raise Exception(f"Error reading file {file_path}: {e}")
 
-    @staticmethod
     def create_packet(src_ip, dst_ip, ttl, file_data, identifier, more_chunk, seq_number):
         ip_packet = IP(src=src_ip, dst=dst_ip, ttl=ttl, version=4, id=identifier)
 
@@ -36,12 +35,7 @@ class PacketHandler:
 
         calculated_checksum = checksum(bytes(result)[:20])
         result[IP].chksum = calculated_checksum
-
         return result
-
-    def log_packet_info(self, packet):
-        self.logger_service.log_info(f"Packet created: {packet.summary()}")
-        self.logger_service.log_debug(f"Packet details: {packet.show()}")
 
 class LoggerService:
     def __init__(self, name=__name__):
@@ -62,6 +56,13 @@ class PacketService:
     def __init__(self, logger_service):
         self.logger_service = logger_service
 
+    @staticmethod
+    def create_outer_packet(src_ip, dst_ip, ttl, file_data, identifier, more_chunk, seq_number):
+        inner_packet = PacketHandler.create_packet(src_ip, dst_ip, ttl, file_data, identifier, more_chunk,
+                                                   seq_number)
+        outer_packet_data = inner_packet
+        return PacketHandler.create_packet(src_ip, dst_ip, ttl, outer_packet_data, identifier, 0, 0)
+
     def validate_checksum(self, packet, raw_ip_header):
         calculated_checksum = checksum(raw_ip_header)
         if int(calculated_checksum) != int(packet[IP].chksum):
@@ -69,10 +70,7 @@ class PacketService:
             return False
         return True
 
-    def create_outer_packet(self, src_ip, dst_ip, ttl, file_data, identifier, more_chunk, seq_number):
-        inner_packet = PacketHandler.create_packet(src_ip, dst_ip, ttl, file_data, identifier, more_chunk, seq_number)
-        outer_packet_data = inner_packet
-        return PacketHandler.create_packet(src_ip, dst_ip, ttl, outer_packet_data, identifier, 0, 0)
+
 
     def send_packet(self, packet):
         try:
